@@ -2,16 +2,12 @@ const httpPort = 3000;
 const kurentoIP = '127.0.0.1';
 const kurentoPort = 8888;
 const fs = require('fs');
-const https = require('https');
+const http = require('http');
 const express = require('express');
 const kurento = require('kurento-client');
 const app = express();
 
-const server = https.createServer({
-	key: fs.readFileSync('./certs/key.pem'),
-	cert: fs.readFileSync('./certs/cert.pem'),
-	passphrase: 'your certificate passphrase'
-}, app);
+const server = http.createServer(app);
 
 const sio = require('socket.io')({
 	cors: {
