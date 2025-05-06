@@ -4,7 +4,6 @@ export default class presenter {
         this.sharingStream = { display: null, audio: null };
         this.sharingOptions = {
             mechanism: 'distributed',
-            maxFrameRate: 20,
             microphone: 'muted',
             screenSize: [800, 600],
         };
@@ -149,13 +148,14 @@ export default class presenter {
         this.sharingOptions = { ...this.sharingOptions, ...options };
         let displayMediaOptions = {
             video: {
-                width: { max: this.sharingOptions.screenSize[0] },
-                height: { max: this.sharingOptions.screenSize[1] },
-                frameRate: {
-                    max: this.sharingOptions.maxFrameRate
-                }
-            },
-            audio: true
+                displaySurface: 'window',  // ou 'monitor'
+                frameRate: 30
+                
+              },
+              audio: true,
+            
+              preferCurrentTab: true
+            
         };
         let audioMediaOptions = {
             video: false,

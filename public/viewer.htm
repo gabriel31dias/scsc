@@ -36,6 +36,13 @@
             <span id="lblSenderId">waiting</span>
         </span>
     </div>
+    <style>
+        #plrVideo {
+    width: 100%;
+    height: 100vh; /* A altura será a altura da janela */
+    object-fit: cover; /* Faz o vídeo se ajustar ao tamanho da tela, mantendo a proporção */
+}
+    </style>
     <div id="divPlayer" class="dsh-player">
         <div id="divLoader" class="dsh-loader"><img src="./assets/image/loading.gif" /></div>
         <video id="plrVideo" autoplay playsinline></video>

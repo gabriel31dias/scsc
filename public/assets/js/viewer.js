@@ -283,6 +283,17 @@ export default class viewer {
                 this.player.muted = true;
                 this.player.srcObject = event.streams[0];
                 this.player.src = event.streams[0];
+                
+                // Adicionar estilos para vídeo em tela cheia
+                this.player.style.width = '100%';
+                this.player.style.height = '100vh';
+                this.player.style.objectFit = 'cover';
+                this.player.style.position = 'fixed';
+                this.player.style.top = '0';
+                this.player.style.left = '0';
+                this.player.style.margin = '0';
+                this.player.style.padding = '0';
+                
                 Object.keys(this.viewers).forEach(id => {
                     if (!this.viewers[id].sharedStream && this.viewers[id].peerConnection) {
                         this.viewers[id].sharedStream = true;
@@ -338,7 +349,7 @@ export default class viewer {
                 }
             }
             options.remoteVideo.autoplay = true;
-            options.remoteVideo.muted = true;
+            options.remoteVideo.muted = false;
             let _this = this;
             this.webRtcPeer = kurentoUtils.WebRtcPeer.WebRtcPeerRecvonly(options, function (error) {
                 if (error) return _this.onError(error);

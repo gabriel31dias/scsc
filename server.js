@@ -1,4 +1,4 @@
-const httpPort = 3000;
+const httpPort = 3001;
 const kurentoIP = '127.0.0.1';
 const kurentoPort = 8888;
 const fs = require('fs');
