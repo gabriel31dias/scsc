@@ -5,7 +5,7 @@ export default class presenter {
         this.sharingOptions = {
             mechanism: 'distributed',
             microphone: 'muted',
-            screenSize: [800, 600],
+            screenSize: [1920, 1080],
         };
         this.nodePort = window.location.port;
         this.socket = null;
@@ -139,104 +139,62 @@ export default class presenter {
     }
 
     async startSharing(options, startEvent, stopEvent, failedEvent) {
-        if (!options) {
-            options = {};
-        }
-        if (options.screenSize) {
-            options.screenSize = options.screenSize.split("*");
-        }
-        this.sharingOptions = { ...this.sharingOptions, ...options };
-        let displayMediaOptions = {
-            video: {
-                displaySurface: 'window',  // ou 'monitor'
-                frameRate: 30
-                
-              },
-              audio: true,
-            
-              preferCurrentTab: true
-            
-        };
-        let audioMediaOptions = {
-            video: false,
-            audio: true
-        };
         try {
-            this.sharingStream.display = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
-        }
-        catch (err) {
-            if (failedEvent) {
-                failedEvent.call(err.toString());
-            }
-            console.error("Error: " + err);
-            this.socket.emit("presenterStopSharing");
-            this.stop();
-            return false;
-        }
-        if (!this.sharingStream.display) {
-            failedEvent.call("Unknown exception");
-            this.socket.emit("presenterStopSharing");
-            this.stop();
-            return false;
-        }
-        try {
-            this.sharingStream.audio = await navigator.mediaDevices.getUserMedia(audioMediaOptions);
-        }
-        catch (err) {
-
-        }
-        if (startEvent) {
-            startEvent.call();
-        }
-
-        let tracks = this.getTracks();
-        tracks.forEach(track => {
-            if (track.kind == "video") {
-                track.addEventListener('ended', () => {
-                    Object.keys(this.viewers).forEach(id => {
-                        this.viewers[id].sharedStream = false;
-                    });
-                    let tracks = this.getTracks();
-                    tracks.forEach(track => {
-                        if (track.kind == "audio") {
-                            track.enabled = false;
-                            track.stop();
-                        }
-                    });
-                    this.sharingStream.display = null;
-                    this.sharingStream.audio = null;
-                    this.socket.emit("presenterStopSharing");
-                    if (stopEvent) {
-                        stopEvent.call();
-                    }
-                    this.stop();
-                });
-            }
-        });
-        if (this.sharingOptions.mechanism == 'streamserver') {
-            this.presenter();
-        }
-        else {
-            Object.keys(this.viewers).forEach(id => {
-                if (!this.viewers[id].sharedStream && this.viewers[id].peerConnection) {
-                    this.viewers[id].sharedStream = true;
-                    this.viewers[id].senders = this.viewers[id].senders ? this.viewers[id].senders : [];
-                    let sendersLength = this.viewers[id].senders.length;
-                    tracks.forEach(track => {
-                        if (sendersLength) {
-                            this.viewers[id].senders.find(sender => sender.track.kind === track.kind).replaceTrack(track);
-                        }
-                        else {
-                            this.viewers[id].senders.push(this.viewers[id].peerConnection.addTrack(track, this.sharingStream.display));
-                        }
-                    });
+            // Atualizar opções de compartilhamento
+            if (options) {
+                if (options.mechanism) {
+                    this.sharingOptions.mechanism = options.mechanism;
                 }
-            });
-            this.socket.emit("presenterStartSharing");
-        }
+                if (options.microphone) {
+                    this.sharingOptions.microphone = options.microphone;
+                }
+                if (options.screenSize) {
+                    let size = options.screenSize.split("*");
+                    this.sharingOptions.screenSize = [parseInt(size[0]), parseInt(size[1])];
+                }
+            }
 
-        this.onStatusChanged();
-        return true;
+            // Configuração para captura de tela com áudio
+            const mediaOptions = {
+                video: {
+                    cursor: "always",
+                    frameRate: parseInt(options.maxFrameRate) || 30,
+                    width: { ideal: this.sharingOptions.screenSize[0] },
+                    height: { ideal: this.sharingOptions.screenSize[1] }
+                },
+                audio: {
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    sampleRate: 44100,
+                    channelCount: 2
+                },
+                systemAudio: "include"
+            };
+
+            // Capturar tela e áudio
+            this.sharingStream.display = await navigator.mediaDevices.getDisplayMedia(mediaOptions);
+            
+            console.log('Áudio tracks:', this.sharingStream.display.getAudioTracks());
+            console.log('Video tracks:', this.sharingStream.display.getVideoTracks());
+
+            // Verificar se temos áudio
+            if (this.sharingStream.display.getAudioTracks().length > 0) {
+                console.log('Áudio capturado com sucesso');
+            }
+
+            if (this.sharingOptions.mechanism == 'streamserver') {
+                this.presenter();
+            }
+            else {
+                this.socket.emit("presenterStartSharing");
+            }
+            if (startEvent) {
+                startEvent();
+            }
+        } catch (err) {
+            console.error('Erro ao iniciar compartilhamento:', err);
+            if (failedEvent) failedEvent();
+        }
     }
 
     async stopSharing(stopEvent) {
