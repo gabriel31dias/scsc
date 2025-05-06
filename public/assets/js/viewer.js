@@ -15,6 +15,8 @@ export default class viewer {
         this.iceServers = options.iceServers;
         this.webRtcPeer = null;
         this.autoPlay = false;
+        this.pendingCandidates = [];
+        this.pendingOffer = null;
         this.init();
     }
 
@@ -229,89 +231,130 @@ export default class viewer {
     }
 
     createPeerConnection(viewer) {
-        if (this.streamMechanism == 'streamserver') {
-            return;
+        if (this.streamMechanism == 'streamserver') return;
+
+        if (this.peerConnection) {
+            this.peerConnection.close();
+            this.peerConnection = null;
         }
-        if (!this.iceServers) {
-            this.iceServers = [
-                { urls: "stun:stun.l.google.com:19302" },
-            ]
-        }
+
         const pc = new RTCPeerConnection({
             sdpSemantics: "unified-plan",
-            iceServers: this.iceServers
+            iceServers: this.iceServers || [{ urls: "stun:stun.l.google.com:19302" }],
+            bundlePolicy: "max-bundle",
+            rtcpMuxPolicy: "require"
         });
-        if (viewer) {
-            viewer.peerConnection = pc;
-            pc.onnegotiationneeded = async () => {
-                const offer = await viewer.peerConnection.createOffer();
-                await viewer.peerConnection.setLocalDescription(offer);
-                this.socket.emit("setPresenterOffer", { id: viewer.id, offer: offer });
-            };
-        }
-        else {
-            this.peerConnection = pc;
-        }
 
         pc.onicecandidate = (iceEvent) => {
             if (iceEvent && iceEvent.candidate) {
-                this.socket.emit("setViewerCandidate", { id: viewer ? viewer.id : null, candidate: iceEvent.candidate });
+                this.socket.emit("setViewerCandidate", { 
+                    id: viewer ? viewer.id : null, 
+                    candidate: iceEvent.candidate 
+                });
             }
         };
-
-        if (this.streams && viewer) {
-            this.streams[0].getTracks().forEach(track => {
-                viewer.senders.push(viewer.peerConnection.addTrack(track, this.streams[0]));
-            });
-        }
 
         pc.ontrack = async (event) => {
-            if (viewer) {
-                let sendersLength = viewer.senders.length;
-                event.streams[0].getTracks().forEach(track => {
-                    if (sendersLength) {
-                        viewer.senders.find(sender => sender.track.kind === track.kind).replaceTrack(track);
-                    }
-                    else {
-                        viewer.senders.push(viewer.peerConnection.addTrack(track, event.streams[0]));
-                    }
-                });
-            }
-            else {
+            try {
+                const stream = event.streams[0];
                 this.streams = event.streams;
-                this.player.autoplay = true;
-                this.player.muted = true;
-                this.player.srcObject = event.streams[0];
-                this.player.src = event.streams[0];
                 
-                // Adicionar estilos para vídeo em tela cheia
-                this.player.style.width = '100%';
-                this.player.style.height = '100vh';
-                this.player.style.objectFit = 'cover';
-                this.player.style.position = 'fixed';
-                this.player.style.top = '0';
-                this.player.style.left = '0';
-                this.player.style.margin = '0';
-                this.player.style.padding = '0';
+                const videoElement = this.player;
                 
-                Object.keys(this.viewers).forEach(id => {
-                    if (!this.viewers[id].sharedStream && this.viewers[id].peerConnection) {
-                        this.viewers[id].sharedStream = true;
-                        this.viewers[id].senders = this.viewers[id].senders ? this.viewers[id].senders : [];
-                        let sendersLength = this.viewers[id].senders.length;
-                        event.streams[0].getTracks().forEach(track => {
-                            if (sendersLength) {
-                                this.viewers[id].senders.find(sender => sender.track.kind === track.kind).replaceTrack(track);
-                            }
-                            else {
-                                this.viewers[id].senders.push(this.viewers[id].peerConnection.addTrack(track, event.streams[0]));
-                            }
-                        });
-                    }
+                if (videoElement.srcObject) {
+                    videoElement.srcObject.getTracks().forEach(track => track.stop());
+                }
+                
+                videoElement.srcObject = stream;
+                videoElement.muted = false;
+                videoElement.volume = 1.0;
+                
+                Object.assign(videoElement.style, {
+                    display: 'block',
+                    width: '100%',
+                    height: '100vh',
+                    objectFit: 'cover'
                 });
+
+                const startPlayback = async () => {
+                    try {
+                        stream.getAudioTracks().forEach(track => {
+                            track.enabled = true;
+                            console.log('Audio track enabled:', track.enabled);
+                        });
+
+                        await videoElement.play();
+                        console.log('Playback started successfully');
+                        
+                        if (stream.getAudioTracks().length > 0) {
+                            console.log('Audio tracks present:', stream.getAudioTracks().length);
+                            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                            const source = audioContext.createMediaStreamSource(stream);
+                            const analyser = audioContext.createAnalyser();
+                            source.connect(analyser);
+                            
+                            const checkAudio = () => {
+                                const data = new Uint8Array(analyser.frequencyBinCount);
+                                analyser.getByteFrequencyData(data);
+                                const sum = data.reduce((a, b) => a + b, 0);
+                                console.log('Audio level:', sum);
+                            };
+                            setInterval(checkAudio, 1000);
+                        }
+                    } catch (err) {
+                        console.error('Playback failed:', err);
+                        showPlayButton();
+                    }
+                };
+
+                const showPlayButton = () => {
+                    const button = document.createElement('button');
+                    button.textContent = 'Iniciar Áudio/Vídeo';
+                    Object.assign(button.style, {
+                        position: 'fixed',
+                        zIndex: '1000',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        padding: '20px',
+                        fontSize: '18px',
+                        backgroundColor: '#4CAF50',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '5px',
+                        cursor: 'pointer'
+                    });
+
+                    button.onclick = async () => {
+                        try {
+                            await startPlayback();
+                            button.remove();
+                        } catch (err) {
+                            console.error('Manual playback failed:', err);
+                            alert('Erro ao iniciar reprodução: ' + err.message);
+                        }
+                    };
+
+                    document.body.appendChild(button);
+                };
+
+                await startPlayback();
+
+            } catch (error) {
+                console.error('Stream setup error:', error);
             }
-            this.onStatusChanged();
         };
+
+        pc.onconnectionstatechange = () => {
+            console.log('Connection state:', pc.connectionState);
+        };
+
+        pc.oniceconnectionstatechange = () => {
+            console.log('ICE connection state:', pc.iceConnectionState);
+        };
+
+        this.peerConnection = pc;
+        return pc;
     }
 
     onStatusChanged() {

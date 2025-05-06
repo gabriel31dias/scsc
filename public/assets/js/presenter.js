@@ -142,12 +142,8 @@ export default class presenter {
         try {
             // Atualizar opções de compartilhamento
             if (options) {
-                if (options.mechanism) {
-                    this.sharingOptions.mechanism = options.mechanism;
-                }
-                if (options.microphone) {
-                    this.sharingOptions.microphone = options.microphone;
-                }
+                if (options.mechanism) this.sharingOptions.mechanism = options.mechanism;
+                if (options.microphone) this.sharingOptions.microphone = options.microphone;
                 if (options.screenSize) {
                     let size = options.screenSize.split("*");
                     this.sharingOptions.screenSize = [parseInt(size[0]), parseInt(size[1])];
@@ -162,35 +158,37 @@ export default class presenter {
                     width: { ideal: this.sharingOptions.screenSize[0] },
                     height: { ideal: this.sharingOptions.screenSize[1] }
                 },
-                audio: {
-                    echoCancellation: false,
-                    noiseSuppression: false,
-                    sampleRate: 44100,
-                    channelCount: 2
-                },
-                systemAudio: "include"
+                audio: true, // Simplificado para melhor compatibilidade
+                preferCurrentTab: true, // Preferir aba atual
+                selfBrowserSurface: "include", // Incluir superfície do navegador
+                systemAudio: "include" // Incluir áudio do sistema
             };
 
             // Capturar tela e áudio
             this.sharingStream.display = await navigator.mediaDevices.getDisplayMedia(mediaOptions);
             
-            console.log('Áudio tracks:', this.sharingStream.display.getAudioTracks());
-            console.log('Video tracks:', this.sharingStream.display.getVideoTracks());
+            // Log de debug
+            const audioTracks = this.sharingStream.display.getAudioTracks();
+            console.log('Áudio tracks:', audioTracks);
+            audioTracks.forEach(track => {
+                console.log('Audio track settings:', track.getSettings());
+                track.enabled = true; // Garantir que o áudio está habilitado
+            });
 
-            // Verificar se temos áudio
-            if (this.sharingStream.display.getAudioTracks().length > 0) {
+            if (audioTracks.length > 0) {
                 console.log('Áudio capturado com sucesso');
+            } else {
+                console.warn('Nenhuma faixa de áudio detectada');
             }
 
+            // Continuar com o compartilhamento
             if (this.sharingOptions.mechanism == 'streamserver') {
                 this.presenter();
-            }
-            else {
+            } else {
                 this.socket.emit("presenterStartSharing");
             }
-            if (startEvent) {
-                startEvent();
-            }
+            
+            if (startEvent) startEvent();
         } catch (err) {
             console.error('Erro ao iniciar compartilhamento:', err);
             if (failedEvent) failedEvent();
