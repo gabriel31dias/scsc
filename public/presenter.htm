@@ -189,12 +189,7 @@
             }
         });
 
-        document.getElementById('cmbMicrophone').addEventListener('change', (e) => {
-            presenterObj.setOptions({
-                microphone: e.target.value
-            });
-        });
-
+       
         window.startPresent = (options, startEvent, stopEvent, failedEvent) => {
             presenterObj.startSharing(options, startEvent, stopEvent, failedEvent);
         }

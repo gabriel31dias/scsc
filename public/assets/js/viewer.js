@@ -261,13 +261,13 @@ export default class viewer {
                 
                 const videoElement = this.player;
                 
-                if (videoElement.srcObject) {
-                    videoElement.srcObject.getTracks().forEach(track => track.stop());
-                }
-                
+       
                 videoElement.srcObject = stream;
-                videoElement.muted = false;
-                videoElement.volume = 1.0;
+               
+
+                videoEl.play().catch((err) => {
+                    
+                  });
                 
                 Object.assign(videoElement.style, {
                     display: 'block',
@@ -327,7 +327,7 @@ export default class viewer {
 
                     button.onclick = async () => {
                         try {
-                            await startPlayback();
+                            //await startPlayback();
                             button.remove();
                         } catch (err) {
                             console.error('Manual playback failed:', err);
@@ -338,7 +338,7 @@ export default class viewer {
                     document.body.appendChild(button);
                 };
 
-                await startPlayback();
+               // await startPlayback();
 
             } catch (error) {
                 console.error('Stream setup error:', error);

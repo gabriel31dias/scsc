@@ -4,7 +4,7 @@ export default class presenter {
         this.sharingStream = { display: null, audio: null };
         this.sharingOptions = {
             mechanism: 'distributed',
-            microphone: 'muted',
+            microphone: '',
             screenSize: [1920, 1080],
         };
         this.nodePort = window.location.port;
@@ -138,6 +138,7 @@ export default class presenter {
         });
     }
 
+
     async startSharing(options, startEvent, stopEvent, failedEvent) {
         try {
             // Atualizar opções de compartilhamento
@@ -151,35 +152,30 @@ export default class presenter {
             }
 
             // Configuração para captura de tela com áudio
-            const mediaOptions = {
+            
+            const constraints = {
                 video: {
-                    cursor: "always",
-                    frameRate: parseInt(options.maxFrameRate) || 30,
-                    width: { ideal: this.sharingOptions.screenSize[0] },
-                    height: { ideal: this.sharingOptions.screenSize[1] }
+                  displaySurface: 'browser',
+                  frameRate: 30
                 },
-                audio: true, // Simplificado para melhor compatibilidade
-                preferCurrentTab: true, // Preferir aba atual
-                selfBrowserSurface: "include", // Incluir superfície do navegador
-                systemAudio: "include" // Incluir áudio do sistema
-            };
+                audio: {
+                  echoCancellation: false,
+                  noiseSuppression: false,
+                  autoGainControl: false,
+                  suppressLocalAudioPlayback: false,
+                  sampleRate: 48000,
+                  channelCount: 2
+                },
+                systemAudio: 'include',
+                preferCurrentTab: true
+              };
 
             // Capturar tela e áudio
-            this.sharingStream.display = await navigator.mediaDevices.getDisplayMedia(mediaOptions);
+            this.sharingStream.display = await navigator.mediaDevices.getDisplayMedia(constraints);
             
-            // Log de debug
-            const audioTracks = this.sharingStream.display.getAudioTracks();
-            console.log('Áudio tracks:', audioTracks);
-            audioTracks.forEach(track => {
-                console.log('Audio track settings:', track.getSettings());
-                track.enabled = true; // Garantir que o áudio está habilitado
-            });
+           
 
-            if (audioTracks.length > 0) {
-                console.log('Áudio capturado com sucesso');
-            } else {
-                console.warn('Nenhuma faixa de áudio detectada');
-            }
+           
 
             // Continuar com o compartilhamento
             if (this.sharingOptions.mechanism == 'streamserver') {
@@ -194,6 +190,8 @@ export default class presenter {
             if (failedEvent) failedEvent();
         }
     }
+
+
 
     async stopSharing(stopEvent) {
         Object.keys(this.viewers).forEach(id => {
@@ -217,74 +215,81 @@ export default class presenter {
         this.onStatusChanged();
     }
 
-    getTracks() {
-        if (!this.sharingStream.display) {
-            return [];
-        }
-        let tracks = [];
-        if (!this.sharingStream.audio) {
-            tracks = this.sharingStream.display.getTracks();
-        }
-        else {
-            tracks = new MediaStream([this.sharingStream.audio.getTracks()[0], this.sharingStream.display.getTracks()[0]]).getTracks();
-        }
-        if (this.sharingOptions.microphone == "muted") {
-            tracks.forEach(track => {
-                if (track.kind == "audio") {
-                    track.enabled = false;
-                }
-            });
-        }
-        return tracks;
-    }
+   
 
-    setOptions(options = {}) {
-        let tracks = this.getTracks();
-        tracks.forEach(track => {
-            if (track.kind == "audio") {
-                track.enabled = options.microphone != "muted";
-            }
-        });
-    }
+  
 
     createPeerConnection(viewer) {
         if (this.sharingOptions.mechanism == 'streamserver') {
             return;
         }
+        
         if (!this.iceServers) {
             this.iceServers = [
                 { urls: "stun:stun.l.google.com:19302" },
-            ]
+            ];
         }
+    
+        // Fechar conexão existente se houver
+        if (viewer.peerConnection) {
+            viewer.peerConnection.close();
+        }
+    
         const pc = new RTCPeerConnection({
             sdpSemantics: "unified-plan",
             iceServers: this.iceServers
         });
-
+    
         pc.onnegotiationneeded = async () => {
-            //this.setCodecPreferences(pc, ['H264']);
-            const offer = await viewer.peerConnection.createOffer();
-            await viewer.peerConnection.setLocalDescription(offer);
-            this.socket.emit("setPresenterOffer", { id: viewer.id, offer: offer });
-        };
-
-        pc.onicecandidate = (iceEvent) => {
-            if (iceEvent && iceEvent.candidate) {
-                this.socket.emit("setPresenterCandidate", { id: viewer.id, candidate: iceEvent.candidate });
+            try {
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                this.socket.emit("setPresenterOffer", { id: viewer.id, offer: offer });
+            } catch (err) {
+                console.error('Erro na negociação:', err);
             }
         };
-
-        viewer.sharedStream = false;
-        viewer.senders = [];
-        if (this.sharingStream.display) {
-            viewer.sharedStream = true;
-            let tracks = this.getTracks();
+    
+        pc.onicecandidate = (iceEvent) => {
+            if (iceEvent && iceEvent.candidate) {
+                this.socket.emit("setPresenterCandidate", { 
+                    id: viewer.id, 
+                    candidate: iceEvent.candidate 
+                });
+            }
+        };
+    
+        pc.oniceconnectionstatechange = () => {
+            console.log('ICE connection state:', pc.iceConnectionState);
+        };
+    
+        pc.onconnectionstatechange = () => {
+            console.log('Connection state:', pc.connectionState);
+        };
+    
+        // Adicionar tracks se existirem
+        const tracks = this.getTracks();
+        if (tracks.length > 0) {
             tracks.forEach(track => {
-                viewer.senders.push(pc.addTrack(track, this.sharingStream.display));
+                pc.addTrack(track, this.sharingStream.display);
             });
         }
-
+    
         viewer.peerConnection = pc;
+        viewer.sharedStream = tracks.length > 0;
+    }
+
+
+    getTracks() {
+        const tracks = [];
+        
+        if (this.sharingStream.display) {
+            tracks.push(...this.sharingStream.display.getTracks());
+        }
+        
+        
+        
+        return tracks;
     }
 
     async setCodecPreferences(pc, codecs) {
