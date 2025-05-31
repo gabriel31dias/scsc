@@ -143,6 +143,21 @@
     <script type="module">
         import viewer from './assets/js/viewer.js';
 
+        document.getElementById('plrVideo').addEventListener('click', () => {
+    const video = document.getElementById('plrVideo');
+    
+    if (document.fullscreenElement) {
+        document.exitFullscreen().catch(err => {
+            console.warn('Erro ao sair do modo tela cheia:', err);
+        });
+    } else {
+        video.requestFullscreen().catch(err => {
+            console.warn('Erro ao entrar no modo tela cheia:', err);
+        });
+    }
+});
+
+
         var events = { 'start': null, 'stop': null };
         var viewerObj = new viewer({
             player: document.getElementById('plrVideo'),
