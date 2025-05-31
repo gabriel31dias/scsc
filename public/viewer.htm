@@ -143,6 +143,16 @@
     <script type="module">
         import viewer from './assets/js/viewer.js';
 
+
+        document.getElementById("btnPlay").addEventListener("click", () => {
+    const video = document.getElementById('plrVideo');
+   
+    video.play().catch(err => {
+        console.warn('Erro ao tentar reproduzir o vídeo:', err);
+    });
+    document.getElementById("btnPlay").style.display = 'none';
+});
+
         document.getElementById('plrVideo').addEventListener('click', () => {
     const video = document.getElementById('plrVideo');
     
